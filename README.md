@@ -37,7 +37,7 @@ which is used to compute the week-over-week trending.
 
 Everything is configured via constants at the top of `gas_prices.py`:
 
-- `ZIP_CODES` — zip codes to search
+- `ZIP_CODES` — default zip codes to search, overridable via `--zip`
 - `FUEL_GRADES` — fuel grades selectable via `--grade`
 - `REWARDS` / `REWARDS_LABEL` — per-station rewards discounts applied on top
   of the listed price

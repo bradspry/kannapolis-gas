@@ -2,8 +2,8 @@
 
 *by Brad Spry, Kannapolitan*
 
-Finds the cheapest regular-grade gas prices near Kannapolis, NC (28083), using
-[py-gasbuddy](https://pypi.org/project/py-gasbuddy/) plus a couple of
+Finds the cheapest regular or diesel gas prices near Kannapolis, NC (28083),
+using [py-gasbuddy](https://pypi.org/project/py-gasbuddy/) plus a couple of
 directly-scraped stations that aren't listed on GasBuddy. Applies known
 rewards-program discounts, ranks stations by effective price, and tracks
 week-over-week trends in a local SQLite database.
@@ -12,7 +12,9 @@ week-over-week trends in a local SQLite database.
 
 ```bash
 pip install -r requirements.txt
-python gas_prices.py
+python gas_prices.py                    # regular grade, default zip code(s)
+python gas_prices.py --grade diesel
+python gas_prices.py --zip 28083 28025
 ```
 
 Example output:
@@ -36,6 +38,7 @@ which is used to compute the week-over-week trending.
 Everything is configured via constants at the top of `gas_prices.py`:
 
 - `ZIP_CODES` — zip codes to search
+- `FUEL_GRADES` — fuel grades selectable via `--grade`
 - `REWARDS` / `REWARDS_LABEL` — per-station rewards discounts applied on top
   of the listed price
 - `PINNED_STATIONS` — stations scraped directly from their own site because

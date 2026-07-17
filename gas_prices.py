@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Gas price scraper for Kannapolis, NC (28083) using py-gasbuddy."""
 
+import argparse
 import asyncio
 import re
 import sqlite3
@@ -13,10 +14,16 @@ from py_gasbuddy import GasBuddy
 
 ZIP_CODES = [28083]
 CITY = "Kannapolis, NC"
-GRADE_LABEL = "Regular Grade"
 LIMIT = 10
 MAX_PRICE_AGE_HOURS = 48
 DB_PATH = Path(__file__).parent / "gas_prices.db"
+
+# Fuel grades this script can fetch. `field` is the GasBuddy API's price key,
+# `pinned_label` is the label used to find the price on pinned stations' pages.
+FUEL_GRADES: dict[str, dict[str, str]] = {
+    "regular": {"field": "regular_gas", "label": "Regular Grade", "pinned_label": "Regular"},
+    "diesel":  {"field": "diesel",      "label": "Diesel",        "pinned_label": "Diesel"},
+}
 
 # Rewards program discounts in $/gal. Keys are matched case-insensitively
 # against station names. Set a value to 0.0 to exclude that program.
@@ -61,42 +68,47 @@ def _open_db() -> sqlite3.Connection:
             run_at    TEXT NOT NULL,
             name      TEXT NOT NULL,
             address   TEXT NOT NULL,
-            price     REAL NOT NULL
+            price     REAL NOT NULL,
+            grade     TEXT NOT NULL DEFAULT 'regular'
         )
     """)
+    try:
+        con.execute("ALTER TABLE snapshots ADD COLUMN grade TEXT NOT NULL DEFAULT 'regular'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     con.commit()
     return con
 
 
-def save_snapshot(stations: list[dict]) -> None:
+def save_snapshot(stations: list[dict], grade: str) -> None:
     """Record the current station prices as a single timestamped run."""
     run_at = datetime.now(tz=timezone.utc).isoformat()
     con = _open_db()
     con.executemany(
-        "INSERT INTO snapshots (run_at, name, address, price) VALUES (?, ?, ?, ?)",
-        [(run_at, s["name"], s["address"], s["price"]) for s in stations],
+        "INSERT INTO snapshots (run_at, name, address, price, grade) VALUES (?, ?, ?, ?, ?)",
+        [(run_at, s["name"], s["address"], s["price"], grade) for s in stations],
     )
     con.commit()
     con.close()
 
 
-def last_week_avg() -> float | None:
+def last_week_avg(grade: str) -> float | None:
     """Return the average price from the run closest to 7 days ago, or None."""
     con = _open_db()
     # Find the run_at timestamp nearest to 7 days ago
     row = con.execute("""
         SELECT run_at
         FROM snapshots
-        WHERE run_at < datetime('now', '-3 days')
+        WHERE run_at < datetime('now', '-3 days') AND grade = ?
         ORDER BY ABS(julianday(run_at) - julianday('now', '-7 days'))
         LIMIT 1
-    """).fetchone()
+    """, (grade,)).fetchone()
     if not row:
         con.close()
         return None
     target_run = row[0]
     avg = con.execute(
-        "SELECT AVG(price) FROM snapshots WHERE run_at = ?", (target_run,)
+        "SELECT AVG(price) FROM snapshots WHERE run_at = ? AND grade = ?", (target_run, grade)
     ).fetchone()[0]
     con.close()
     return avg
@@ -106,8 +118,8 @@ def last_week_avg() -> float | None:
 # GasBuddy fetch
 # ---------------------------------------------------------------------------
 
-async def _fetch_one_zip(gb: "GasBuddy", zip_code: int, limit: int) -> list[dict]:
-    """Fetch station info and regular-gas prices for a single zip code."""
+async def _fetch_one_zip(gb: "GasBuddy", zip_code: int, limit: int, fuel_field: str) -> list[dict]:
+    """Fetch station info and `fuel_field`-grade prices for a single zip code."""
     locations, prices_data = await asyncio.gather(
         gb.location_search(zipcode=zip_code),
         gb.price_lookup_service(zipcode=zip_code, limit=limit * 2),
@@ -124,7 +136,7 @@ async def _fetch_one_zip(gb: "GasBuddy", zip_code: int, limit: int) -> list[dict
     results = []
     for entry in prices_data.get("results", []):
         sid = entry.get("station_id")
-        reg = entry.get("regular_gas") or {}
+        reg = entry.get(fuel_field) or {}
         price = reg.get("price")
         if price is None:
             continue
@@ -146,15 +158,16 @@ async def _fetch_one_zip(gb: "GasBuddy", zip_code: int, limit: int) -> list[dict
     return results
 
 
-async def _fetch_pinned_stations() -> list[dict]:
-    """Scrape regular-gas prices for stations not listed on GasBuddy."""
+async def _fetch_pinned_stations(pinned_label: str) -> list[dict]:
+    """Scrape `pinned_label`-grade prices for stations not listed on GasBuddy."""
     results = []
     async with aiohttp.ClientSession() as session:
         for station in PINNED_STATIONS:
             try:
                 async with session.get(station["url"], timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     html = await resp.text()
-                m = re.search(r'Regular(?:<!-- -->)?:.*?\$([0-9]+\.[0-9]+)</span>', html, re.DOTALL | re.IGNORECASE)
+                pattern = rf'{re.escape(pinned_label)}(?:<!-- -->)?:.*?\$([0-9]+\.[0-9]+)</span>'
+                m = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
                 if m:
                     results.append({
                         "name": station["name"],
@@ -166,12 +179,12 @@ async def _fetch_pinned_stations() -> list[dict]:
     return results
 
 
-async def fetch_prices(zip_codes: list[int], limit: int) -> list[dict]:
+async def fetch_prices(zip_codes: list[int], limit: int, fuel_field: str, pinned_label: str) -> list[dict]:
     """Fetch GasBuddy + pinned station prices, dedupe, and return the cheapest `limit`."""
     gb = GasBuddy()
     all_results, pinned = await asyncio.gather(
-        asyncio.gather(*[_fetch_one_zip(gb, z, limit) for z in zip_codes]),
-        _fetch_pinned_stations(),
+        asyncio.gather(*[_fetch_one_zip(gb, z, limit, fuel_field) for z in zip_codes]),
+        _fetch_pinned_stations(pinned_label),
     )
 
     seen: set[str] = set()
@@ -229,15 +242,31 @@ def _rewards_label(station_name: str) -> str:
     return "rewards"
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Find the cheapest gas prices near Kannapolis, NC.")
+    parser.add_argument(
+        "--grade", choices=sorted(FUEL_GRADES), default="regular",
+        help="fuel grade to fetch (default: regular)",
+    )
+    parser.add_argument(
+        "--zip", type=int, nargs="+", default=ZIP_CODES,
+        help=f"zip code(s) to search (default: {' '.join(str(z) for z in ZIP_CODES)})",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     """Fetch prices, print the ranked list with trend info, and save a snapshot."""
+    args = _parse_args()
+    grade = FUEL_GRADES[args.grade]
+
     today = date.today().strftime("%B %d, %Y")
     print("Friday Fill-up ⛽")
-    zip_label = "/".join(str(z) for z in ZIP_CODES)
-    print(f"({GRADE_LABEL}) Lowest Gas Prices Near {CITY} ({zip_label})")
+    zip_label = "/".join(str(z) for z in args.zip)
+    print(f"({grade['label']}) Lowest Gas Prices Near {CITY} ({zip_label})")
     print(today)
 
-    stations = asyncio.run(fetch_prices(ZIP_CODES, LIMIT))
+    stations = asyncio.run(fetch_prices(args.zip, LIMIT, grade["field"], grade["pinned_label"]))
 
     if not stations:
         print("No prices found.")
@@ -258,9 +287,9 @@ def main() -> None:
         print(f"${eff_str} — {s['name']} ({short_addr}){rewards_note}")
 
     current_avg = sum(s["price"] for s in stations) / len(stations)
-    prior_avg = last_week_avg()
+    prior_avg = last_week_avg(args.grade)
 
-    save_snapshot(stations)
+    save_snapshot(stations, args.grade)
 
     if prior_avg is not None:
         delta = current_avg - prior_avg

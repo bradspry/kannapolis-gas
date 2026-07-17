@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+gas_prices.db
+.claude/settings.local.json

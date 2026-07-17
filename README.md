@@ -28,8 +28,8 @@ Since Last Week: Prices Trending ⬇️ (-$0.020)
 Sources: GasBuddy, Dash In
 ```
 
-Each run appends a snapshot to `gas_prices.db` (created automatically, not
-tracked in git), which is used to compute the week-over-week trend line.
+Each run appends a snapshot to `gas_prices.db` (created automatically),
+which is used to compute the week-over-week trend line.
 
 ## Configuration
 

@@ -29,7 +29,7 @@ Sources: GasBuddy, Dash In
 ```
 
 Each run appends a snapshot to `gas_prices.db` (created automatically),
-which is used to compute the week-over-week trend line.
+which is used to compute the week-over-week trending.
 
 ## Configuration
 

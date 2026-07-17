@@ -1,4 +1,4 @@
-# gas
+# kannapolis-gas
 
 *by Brad Spry, Kannapolitan*
 

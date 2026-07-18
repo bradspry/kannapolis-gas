@@ -252,6 +252,10 @@ def _parse_args() -> argparse.Namespace:
         "--zip", type=int, nargs="+", default=ZIP_CODES,
         help=f"zip code(s) to search (default: {' '.join(str(z) for z in ZIP_CODES)})",
     )
+    parser.add_argument(
+        "--limit", type=int, default=LIMIT,
+        help=f"number of stations to show (default: {LIMIT})",
+    )
     return parser.parse_args()
 
 
@@ -266,7 +270,7 @@ def main() -> None:
     print(f"({grade['label']}) Lowest Gas Prices Near {CITY} ({zip_label})")
     print(today)
 
-    stations = asyncio.run(fetch_prices(args.zip, LIMIT, grade["field"], grade["pinned_label"]))
+    stations = asyncio.run(fetch_prices(args.zip, args.limit, grade["field"], grade["pinned_label"]))
 
     if not stations:
         print("No prices found.")

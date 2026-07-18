@@ -15,6 +15,7 @@ pip install -r requirements.txt
 python gas_prices.py                    # regular grade, default zip code(s)
 python gas_prices.py --grade diesel
 python gas_prices.py --zip 28083 28025
+python gas_prices.py --limit 5
 ```
 
 Example output:
@@ -38,6 +39,7 @@ which is used to compute the week-over-week trending.
 Everything is configured via constants at the top of `gas_prices.py`:
 
 - `ZIP_CODES` — default zip codes to search, overridable via `--zip`
+- `LIMIT` — default number of stations to show, overridable via `--limit`
 - `FUEL_GRADES` — fuel grades selectable via `--grade`
 - `REWARDS` / `REWARDS_LABEL` — per-station rewards discounts applied on top
   of the listed price

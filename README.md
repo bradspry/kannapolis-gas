@@ -14,6 +14,7 @@ week-over-week trends in a local SQLite database.
 pip install -r requirements.txt
 python gas_prices.py                    # regular grade, default zip code(s)
 python gas_prices.py --grade diesel
+python gas_prices.py --grade combined      # both grades, one run
 python gas_prices.py --zip 28083 28025
 python gas_prices.py --limit 5
 ```
@@ -24,10 +25,13 @@ Example output:
 Friday Fill-up ⛽
 (Regular Grade) Lowest Gas Prices Near Kannapolis, NC (28083)
 July 17, 2026
+
 $2.699 — Sam's Club (123 Example Rd) (-$0.05 rewards, $2.749)
 $2.759 — Shell (456 Sample Ave) (-$0.05 rewards, $2.809)
 ...
+
 Since Last Week: Prices Trending ⬇️ (-$0.020)
+
 Sources: GasBuddy, Dash In
 ```
 

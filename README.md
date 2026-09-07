@@ -33,6 +33,8 @@ $2.759 — Shell (456 Sample Ave) (-$0.05 rewards)
 Since Last Week: Prices Trending ⬇️ (-$0.020)
 
 Sources: GasBuddy, Dash In
+
+191 days since the Military conflict involving Iran began 🛢️
 ```
 
 Each run appends a snapshot to `gas_prices.db` (created automatically),

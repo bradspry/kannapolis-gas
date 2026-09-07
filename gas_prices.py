@@ -18,6 +18,9 @@ LIMIT = 10
 MAX_PRICE_AGE_HOURS = 48
 DB_PATH = Path(__file__).parent / "gas_prices.db"
 
+# Start of the military conflict involving Iran, used for the day-count footer.
+CONFLICT_START = date(2026, 2, 28)
+
 # Fuel grades this script can fetch. `field` is the GasBuddy API's price key,
 # `pinned_label` is the label used to find the price on pinned stations' pages.
 FUEL_GRADES: dict[str, dict[str, str]] = {
@@ -259,6 +262,12 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _conflict_days_line() -> str:
+    """Return the footer counting days since the Iran conflict began."""
+    days = (date.today() - CONFLICT_START).days
+    return f"{days} days since the Military conflict involving Iran began 🛢️"
+
+
 def _pinned_sources(stations: list[dict]) -> list[str]:
     """Return the names of pinned (non-GasBuddy) stations present in `stations`, deduped."""
     pinned_names = {p["name"].lower() for p in PINNED_STATIONS}
@@ -336,18 +345,22 @@ def main() -> None:
                 print()
             print(f"{FUEL_GRADES[grade_key]['label']}:")
             all_stations += _run_grade(grade_key, args, show_sources=False)
-        if not all_stations:
-            sys.exit(1)
-        print()
-        sources = ["GasBuddy"] + _pinned_sources(all_stations)
-        print(f"Sources: {', '.join(sources)}")
+        found = bool(all_stations)
+        if found:
+            print()
+            sources = ["GasBuddy"] + _pinned_sources(all_stations)
+            print(f"Sources: {', '.join(sources)}")
     else:
         grade = FUEL_GRADES[args.grade]
         print(f"({grade['label']}) Lowest Gas Prices Near {CITY} ({zip_label})")
         print(today)
         print()
-        if not _run_grade(args.grade, args):
-            sys.exit(1)
+        found = bool(_run_grade(args.grade, args))
+
+    print()
+    print(_conflict_days_line())
+    if not found:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

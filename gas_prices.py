@@ -289,7 +289,7 @@ def _run_grade(grade_key: str, args: argparse.Namespace, show_sources: bool = Tr
         short_addr = re.sub(r'^\d+\s+', '', s["address"])
         if discount > 0:
             label = _rewards_label(s["name"])
-            rewards_note = f" (-${_fmt(discount)} {label}, ${_fmt(s['price'])})"
+            rewards_note = f" (-${_fmt(discount)} {label})"
         else:
             rewards_note = ""
         print(f"${eff_str} — {s['name']} ({short_addr}){rewards_note}")

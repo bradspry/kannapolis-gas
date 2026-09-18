@@ -25,7 +25,7 @@ Example output:
 ```
 Friday Fill-up ⛽
 (Regular Grade) Lowest Gas Prices Near Kannapolis, NC (28083)
-July 17, 2026
+September 17, 2026
 
 $2.699 — Sam's Club (123 Example Rd) (-$0.05 rewards)
 $2.759 — Shell (456 Sample Ave) (-$0.05 rewards)
@@ -34,8 +34,6 @@ $2.759 — Shell (456 Sample Ave) (-$0.05 rewards)
 Since Last Week: Prices Trending ⬇️ (-$0.020)
 
 Sources: GasBuddy, Dash In
-
-191 days since the Military conflict involving Iran began 🛢️
 ```
 
 Each run appends a snapshot to `gas_prices.db` (created automatically),

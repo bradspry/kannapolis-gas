@@ -12,11 +12,12 @@ price, and tracks week-over-week trends in a local SQLite database.
 
 ```bash
 pip install -r requirements.txt
-python gas_prices.py                    # regular grade, default zip code(s)
+python gas_prices.py                       # regular grade, default zip code(s)
 python gas_prices.py --grade diesel
 python gas_prices.py --grade combined      # both grades, one run
 python gas_prices.py --zip 28083 28025
 python gas_prices.py --limit 5
+python gas_prices.py --no-rewards          # rank by listed price only
 ```
 
 Example output:
@@ -53,6 +54,21 @@ Two things fall outside that filter:
 - `PINNED_STATIONS` are scraped live from their own sites on every run, so they
   carry no age data and are current by definition.
 
+### Rewards discounts
+
+By default the ranking uses the *effective* price — the listed price minus any
+per-gallon discount in `REWARDS` — and each discounted line is annotated with
+the amount and program name, e.g. `(-$0.05 QT Pay)`.
+
+Pass `--no-rewards` to rank by listed price only. This can genuinely reorder
+the list, not just drop the annotations: a station with a large discount can be
+cheapest on effective price while being among the most expensive on the sticker
+price.
+
+Either way, the snapshot written to `gas_prices.db` and the week-over-week
+trend are computed from listed prices, so runs with and without `--no-rewards`
+stay directly comparable.
+
 ## Configuration
 
 Everything is configured via constants at the top of `gas_prices.py`:
@@ -62,7 +78,7 @@ Everything is configured via constants at the top of `gas_prices.py`:
 - `FUEL_GRADES` — fuel grades selectable via `--grade`
 - `MAX_PRICE_AGE_HOURS` — ignore GasBuddy prices older than this (24)
 - `REWARDS` / `REWARDS_LABEL` — per-station rewards discounts applied on top
-  of the listed price
+  of the listed price, unless `--no-rewards` is passed
 - `PINNED_STATIONS` — stations scraped directly from their own site because
   they aren't on GasBuddy
 

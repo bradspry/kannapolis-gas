@@ -227,8 +227,10 @@ def _fmt(price: float) -> str:
     return s[:-1] if s[-1] == "0" else s
 
 
-def _rewards_discount(station_name: str) -> float:
+def _rewards_discount(station_name: str, use_rewards: bool = True) -> float:
     """Look up the per-gallon rewards discount for a station, if any."""
+    if not use_rewards:
+        return 0.0
     name_lower = station_name.lower()
     for keyword, discount in REWARDS.items():
         if keyword in name_lower:
@@ -258,6 +260,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit", type=int, default=LIMIT,
         help=f"number of stations to show (default: {LIMIT})",
+    )
+    parser.add_argument(
+        "--no-rewards", action="store_true",
+        help="rank by listed price only, ignoring rewards-program discounts",
     )
     return parser.parse_args()
 
@@ -289,10 +295,11 @@ def _run_grade(grade_key: str, args: argparse.Namespace, show_sources: bool = Tr
         print(f"No {grade['label'].lower()} prices found.")
         return []
 
-    stations.sort(key=lambda s: s["price"] - _rewards_discount(s["name"]))
+    use_rewards = not args.no_rewards
+    stations.sort(key=lambda s: s["price"] - _rewards_discount(s["name"], use_rewards))
 
     for s in stations:
-        discount = _rewards_discount(s["name"])
+        discount = _rewards_discount(s["name"], use_rewards)
         effective = s["price"] - discount
         eff_str = _fmt(effective)
         short_addr = re.sub(r'^\d+\s+', '', s["address"])

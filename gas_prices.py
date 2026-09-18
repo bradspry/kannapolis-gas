@@ -15,7 +15,7 @@ from py_gasbuddy import GasBuddy
 ZIP_CODES = [28083]
 CITY = "Kannapolis, NC"
 LIMIT = 10
-MAX_PRICE_AGE_HOURS = 48
+MAX_PRICE_AGE_HOURS = 24
 DB_PATH = Path(__file__).parent / "gas_prices.db"
 
 # Start of the military conflict involving Iran, used for the day-count footer.

@@ -25,6 +25,15 @@ FUEL_GRADES: dict[str, dict[str, str]] = {
     "diesel":  {"field": "diesel",      "label": "Diesel",        "pinned_label": "Diesel"},
 }
 
+# Aviation fuel isn't on GasBuddy, so `--grade aviation` scrapes these airports'
+# AirNav FBO pages instead. Each fuel/service line (e.g. 100LL Avgas, Self
+# service) is listed as its own entry.
+AVIATION_LABEL = "Aviation"
+AIRPORTS: list[dict] = [
+    {"name": "Concord (KJQF)", "url": "https://www.airnav.com/airport/KJQF/A"},
+    {"name": "Rowan (KRUQ)",   "url": "https://www.airnav.com/airport/KRUQ/A2"},
+]
+
 # Rewards program discounts in $/gal. Keys are matched case-insensitively
 # against station names. Set a value to 0.0 to exclude that program.
 REWARDS: dict[str, float] = {
@@ -179,6 +188,33 @@ async def _fetch_pinned_stations(pinned_label: str) -> list[dict]:
     return results
 
 
+_AIRNAV_ROW = re.compile(
+    r'<TD nowrap>\s*([^<]+?)\s*<A[^>]*>([^<]+)</A></TD>\s*<TD>&nbsp;&nbsp;</TD>\s*'
+    r'<TD nowrap>\$([0-9]+\.[0-9]+)</TD>',
+    re.IGNORECASE,
+)
+
+
+async def fetch_airport_prices(limit: int) -> list[dict]:
+    """Scrape aviation fuel prices from each airport's AirNav FBO page."""
+    results = []
+    async with aiohttp.ClientSession(headers={"User-Agent": "Mozilla/5.0"}) as session:
+        for airport in AIRPORTS:
+            try:
+                async with session.get(airport["url"], timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    html = await resp.text()
+            except Exception:
+                continue  # skip silently if the site is unreachable
+            for fuel, service, price in _AIRNAV_ROW.findall(html):
+                results.append({
+                    "name": airport["name"],
+                    "address": f"{fuel}, {service.lower()}",
+                    "price": float(price),
+                })
+    results.sort(key=lambda x: x["price"])
+    return results[:limit]
+
+
 async def fetch_prices(zip_codes: list[int], limit: int, fuel_field: str, pinned_label: str) -> list[dict]:
     """Fetch GasBuddy + pinned station prices, dedupe, and return the cheapest `limit`."""
     gb = GasBuddy()
@@ -247,8 +283,9 @@ def _rewards_label(station_name: str) -> str:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Find the cheapest gas prices near Kannapolis, NC.")
     parser.add_argument(
-        "--grade", choices=sorted(FUEL_GRADES) + ["combined"], default="regular",
-        help="fuel grade to fetch, or 'combined' for both (default: regular)",
+        "--grade", choices=sorted(FUEL_GRADES) + ["aviation", "combined"], default="regular",
+        help="fuel grade to fetch, 'aviation' for local airport fuel, "
+             "or 'combined' for all three (default: regular)",
     )
     parser.add_argument(
         "--zip", type=int, nargs="+", default=ZIP_CODES,
@@ -279,14 +316,20 @@ def _pinned_sources(stations: list[dict]) -> list[str]:
 
 def _run_grade(grade_key: str, args: argparse.Namespace, show_sources: bool = True) -> list[dict]:
     """Fetch, print, and save a snapshot for one fuel grade. Returns the stations found."""
-    grade = FUEL_GRADES[grade_key]
-    stations = asyncio.run(fetch_prices(args.zip, args.limit, grade["field"], grade["pinned_label"]))
+    if grade_key == "aviation":
+        label = AVIATION_LABEL
+        stations = asyncio.run(fetch_airport_prices(args.limit))
+    else:
+        grade = FUEL_GRADES[grade_key]
+        label = grade["label"]
+        stations = asyncio.run(fetch_prices(args.zip, args.limit, grade["field"], grade["pinned_label"]))
 
     if not stations:
-        print(f"No {grade['label'].lower()} prices found.")
+        print(f"No {label.lower()} prices found.")
         return []
 
-    use_rewards = not args.no_rewards
+    # Rewards programs are for road fuel; airport names shouldn't pick them up.
+    use_rewards = not args.no_rewards and grade_key != "aviation"
     stations.sort(key=lambda s: s["price"] - _rewards_discount(s["name"], use_rewards))
 
     for s in stations:
@@ -320,7 +363,10 @@ def _run_grade(grade_key: str, args: argparse.Namespace, show_sources: bool = Tr
 
     if show_sources:
         print()
-        sources = ["GasBuddy"] + _pinned_sources(stations)
+        if grade_key == "aviation":
+            sources = ["AirNav"]
+        else:
+            sources = ["GasBuddy"] + _pinned_sources(stations)
         print(f"Sources: {', '.join(sources)}")
     return stations
 
@@ -334,23 +380,37 @@ def main() -> None:
     zip_label = "/".join(str(z) for z in args.zip)
 
     if args.grade == "combined":
-        print(f"Lowest Gas Prices Near {CITY} ({zip_label})")
+        print(f"Lowest Fuel Prices Near {CITY} ({zip_label})")
         print(today)
         print()
         all_stations: list[dict] = []
-        for i, grade_key in enumerate(FUEL_GRADES):
+        aviation_stations: list[dict] = []
+        for i, grade_key in enumerate(list(FUEL_GRADES) + ["aviation"]):
             if i > 0:
                 print()
-            print(f"{FUEL_GRADES[grade_key]['label']}:")
-            all_stations += _run_grade(grade_key, args, show_sources=False)
-        found = bool(all_stations)
+            if grade_key == "aviation":
+                print(f"{AVIATION_LABEL}:")
+                aviation_stations = _run_grade(grade_key, args, show_sources=False)
+            else:
+                print(f"{FUEL_GRADES[grade_key]['label']}:")
+                all_stations += _run_grade(grade_key, args, show_sources=False)
+        found = bool(all_stations or aviation_stations)
         if found:
             print()
-            sources = ["GasBuddy"] + _pinned_sources(all_stations)
+            sources = []
+            if all_stations:
+                sources += ["GasBuddy"] + _pinned_sources(all_stations)
+            if aviation_stations:
+                sources.append("AirNav")
             print(f"Sources: {', '.join(sources)}")
+    elif args.grade == "aviation":
+        print(f"({AVIATION_LABEL}) Lowest Fuel Prices Near {CITY}")
+        print(today)
+        print()
+        found = bool(_run_grade(args.grade, args))
     else:
         grade = FUEL_GRADES[args.grade]
-        print(f"({grade['label']}) Lowest Gas Prices Near {CITY} ({zip_label})")
+        print(f"({grade['label']}) Lowest Fuel Prices Near {CITY} ({zip_label})")
         print(today)
         print()
         found = bool(_run_grade(args.grade, args))

@@ -2,7 +2,7 @@
 
 *by Brad Spry, Kannapolitan*
 
-Finds the cheapest regular or diesel gas prices near Kannapolis, NC (28083),
+Finds the cheapest regular, diesel, or aviation fuel prices near Kannapolis, NC (28083),
 using [py-gasbuddy](https://pypi.org/project/py-gasbuddy/) plus a couple of
 directly-scraped stations that aren't listed on GasBuddy. Ignores stale
 listings, applies known rewards-program discounts, ranks stations by effective
@@ -14,7 +14,8 @@ price, and tracks week-over-week trends in a local SQLite database.
 pip install -r requirements.txt
 python gas_prices.py                       # regular grade, default zip code(s)
 python gas_prices.py --grade diesel
-python gas_prices.py --grade combined      # both grades, one run
+python gas_prices.py --grade aviation      # 100LL / Jet A at local airports
+python gas_prices.py --grade combined      # regular, diesel, and aviation, one run
 python gas_prices.py --zip 28083 28025
 python gas_prices.py --limit 5
 python gas_prices.py --no-rewards          # rank by listed price only
@@ -24,7 +25,7 @@ Example output:
 
 ```
 Friday Fill-up ⛽
-(Regular Grade) Lowest Gas Prices Near Kannapolis, NC (28083)
+(Regular Grade) Lowest Fuel Prices Near Kannapolis, NC (28083)
 September 17, 2026
 
 $2.699 — Sam's Club (123 Example Rd) (-$0.05 rewards)
@@ -52,6 +53,21 @@ Two things fall outside that filter:
 - `PINNED_STATIONS` are scraped live from their own sites on every run, so they
   carry no age data and are current by definition.
 
+### Aviation fuel
+
+`--grade aviation` skips GasBuddy and scrapes the AirNav FBO pages for the
+airports in `AIRPORTS` (Concord-Padgett KJQF and Mid-Carolina/Rowan KRUQ).
+Each fuel and service type is its own line, cheapest first:
+
+```
+$6.58 — Rowan (KRUQ) (100LL Avgas, self service)
+$7.65 — Concord (KJQF) (Jet A, full service)
+```
+
+Rewards discounts and the 24-hour freshness cutoff don't apply; FBOs update
+AirNav prices on their own schedule. `--grade combined` includes aviation as
+a third section after regular and diesel.
+
 ### Rewards discounts
 
 By default the ranking uses the *effective* price — the listed price minus any
@@ -77,6 +93,7 @@ Everything is configured via constants at the top of `gas_prices.py`:
 - `MAX_PRICE_AGE_HOURS` — ignore GasBuddy prices older than this (24)
 - `REWARDS` / `REWARDS_LABEL` — per-station rewards discounts applied on top
   of the listed price, unless `--no-rewards` is passed
+- `AIRPORTS` — AirNav FBO pages scraped for `--grade aviation`
 - `PINNED_STATIONS` — stations scraped directly from their own site because
   they aren't on GasBuddy
 

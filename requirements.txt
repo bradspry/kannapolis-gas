@@ -1,1 +1,1 @@
-py-gasbuddy
+py-gasbuddy==0.4.3  # 0.5+ changed location_search() results (no "data" key); gas_prices.py reads the 0.4.x shape
